@@ -8,10 +8,19 @@ jobs:
       - checkout
       - run: |
           curl -L https://go.dev/dl/go1.23.0.linux-amd64.tar.gz | sudo tar -xzC /usr/local
-          echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
-          source ~/.bashrc
+          echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> ~/.bashrc
+          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
       - run: make install-tools
-      - run: make generate
+      - run: |
+          # Generate code (download-api is a dependency of generate)
+          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+          make generate
+          # Verify generated files exist and are not empty
+          ls -la api/openapi.yaml || echo "ERROR: OpenAPI spec not found!"
+          ls -la internal/generated/ internal/client/ || echo "ERROR: Generated files not found!"
+          test -s internal/generated/types.go || (echo "ERROR: types.go is empty!" && exit 1)
+          test -s internal/generated/server.go || (echo "ERROR: server.go is empty!" && exit 1)
+          test -s internal/client/client.go || (echo "ERROR: client.go is empty!" && exit 1)
       - run: make deps
       - run: make test
 
@@ -22,10 +31,19 @@ jobs:
       - checkout
       - run: |
           curl -L https://go.dev/dl/go1.23.0.linux-amd64.tar.gz | sudo tar -xzC /usr/local
-          echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
-          source ~/.bashrc
+          echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> ~/.bashrc
+          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
       - run: make install-tools
-      - run: make generate
+      - run: |
+          # Generate code (download-api is a dependency of generate)
+          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+          make generate
+          # Verify generated files exist and are not empty
+          ls -la api/openapi.yaml || echo "ERROR: OpenAPI spec not found!"
+          ls -la internal/generated/ internal/client/ || echo "ERROR: Generated files not found!"
+          test -s internal/generated/types.go || (echo "ERROR: types.go is empty!" && exit 1)
+          test -s internal/generated/server.go || (echo "ERROR: server.go is empty!" && exit 1)
+          test -s internal/client/client.go || (echo "ERROR: client.go is empty!" && exit 1)
       - run: make deps
       - run: |
           # Build for multiple architectures
@@ -33,7 +51,7 @@ jobs:
           echo "Building for Linux AMD64..."
           GOOS=linux GOARCH=amd64 go build -o bin/somana-agent-linux-amd64 ./cmd/server
           
-          echo "Building for Linux ARM64.."
+          echo "Building for Linux ARM64..."
           GOOS=linux GOARCH=arm64 go build -o bin/somana-agent-linux-arm64 ./cmd/server
           
           echo "Building for macOS AMD64..."
