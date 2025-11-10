@@ -11,11 +11,32 @@ jobs:
           echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> ~/.bashrc
           export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
       - run: |
-          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+          export PATH=$PATH:/usr/local/go/bin
+          # Get the actual GOPATH
+          GOPATH=$(go env GOPATH)
+          GOBIN_DIR="$GOPATH/bin"
+          export PATH=$PATH:$GOBIN_DIR
+          echo "GOPATH: $GOPATH"
+          echo "GOBIN_DIR: $GOBIN_DIR"
+          # Ensure the bin directory exists
+          mkdir -p $GOBIN_DIR
           # Install oapi-codegen
           go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+          # Wait a moment for the install to complete
+          sleep 2
           # Verify oapi-codegen was installed
-          ls -la $HOME/go/bin/oapi-codegen || (echo "ERROR: oapi-codegen not found" && exit 1)
+          if [ -f "$GOBIN_DIR/oapi-codegen" ]; then
+            echo "Found oapi-codegen at $GOBIN_DIR/oapi-codegen"
+            chmod +x $GOBIN_DIR/oapi-codegen
+            ls -la $GOBIN_DIR/oapi-codegen
+          elif command -v oapi-codegen > /dev/null; then
+            echo "Found oapi-codegen in PATH: $(which oapi-codegen)"
+          else
+            echo "ERROR: oapi-codegen not found. Checking locations:"
+            ls -la $GOBIN_DIR/ || echo "$GOBIN_DIR/ does not exist"
+            ls -la $HOME/go/bin/ || echo "$HOME/go/bin/ does not exist"
+            exit 1
+          fi
       - run: |
           export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
           # Download OpenAPI specification from somana repo
@@ -25,12 +46,20 @@ jobs:
           # Verify OpenAPI spec exists
           test -s api/openapi.yaml || (echo "ERROR: OpenAPI spec not found or empty!" && exit 1)
       - run: |
-          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+          export PATH=$PATH:/usr/local/go/bin
+          GOPATH=$(go env GOPATH)
+          GOBIN_DIR="$GOPATH/bin"
+          export PATH=$PATH:$GOBIN_DIR
+          # Find oapi-codegen binary
+          OAPI_CODEGEN=$(which oapi-codegen || echo "$GOBIN_DIR/oapi-codegen")
+          echo "Using oapi-codegen at: $OAPI_CODEGEN"
+          # Verify it exists
+          test -f "$OAPI_CODEGEN" || (echo "ERROR: oapi-codegen not found at $OAPI_CODEGEN" && exit 1)
           # Generate code from OpenAPI spec
           mkdir -p internal/generated internal/client
-          $HOME/go/bin/oapi-codegen -package generated -generate types api/openapi.yaml > internal/generated/types.go
-          $HOME/go/bin/oapi-codegen -package generated -generate gin-server api/openapi.yaml > internal/generated/server.go
-          $HOME/go/bin/oapi-codegen -package client -generate types,client api/openapi.yaml > internal/client/client.go
+          $OAPI_CODEGEN -package generated -generate types api/openapi.yaml > internal/generated/types.go
+          $OAPI_CODEGEN -package generated -generate gin-server api/openapi.yaml > internal/generated/server.go
+          $OAPI_CODEGEN -package client -generate types,client api/openapi.yaml > internal/client/client.go
           # Verify generated files exist and are not empty
           test -s internal/generated/types.go || (echo "ERROR: types.go is empty!" && exit 1)
           test -s internal/generated/server.go || (echo "ERROR: server.go is empty!" && exit 1)
