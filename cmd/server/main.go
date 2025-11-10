@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 
 	"somana-agent/internal/config"
@@ -9,8 +10,12 @@ import (
 )
 
 func main() {
+	// Parse command-line flags
+	configPath := flag.String("config", "config/config.yaml", "Path to configuration file")
+	flag.Parse()
+
 	// Load configuration
-	cfg, err := config.LoadConfig("config/config.yaml")
+	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
 		log.Fatal("Failed to load configuration:", err)
 	}
