@@ -126,18 +126,19 @@ generate: download-api
 	@echo "Generating code from OpenAPI spec..."
 	@mkdir -p internal/generated
 	@mkdir -p internal/client
-	@export PATH=$$PATH:/usr/local/go/bin; \
-	if command -v ~/go/bin/oapi-codegen > /dev/null; then \
-		~/go/bin/oapi-codegen -package generated -generate types api/openapi.yaml > internal/generated/types.go; \
-		~/go/bin/oapi-codegen -package generated -generate gin-server api/openapi.yaml > internal/generated/server.go; \
-		~/go/bin/oapi-codegen -package client -generate types,client api/openapi.yaml > internal/client/client.go; \
+	@export PATH=$$PATH:/usr/local/go/bin:$$HOME/go/bin; \
+	if command -v oapi-codegen > /dev/null || [ -f $$HOME/go/bin/oapi-codegen ]; then \
+		OAPI_CODEGEN=$${OAPI_CODEGEN:-$$(command -v oapi-codegen || echo $$HOME/go/bin/oapi-codegen)}; \
+		$$OAPI_CODEGEN -package generated -generate types api/openapi.yaml > internal/generated/types.go; \
+		$$OAPI_CODEGEN -package generated -generate gin-server api/openapi.yaml > internal/generated/server.go; \
+		$$OAPI_CODEGEN -package client -generate types,client api/openapi.yaml > internal/client/client.go; \
 		echo "Code generation complete"; \
 	else \
 		echo "oapi-codegen not found. Installing..."; \
 		go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest; \
-		~/go/bin/oapi-codegen -package generated -generate types api/openapi.yaml > internal/generated/types.go; \
-		~/go/bin/oapi-codegen -package generated -generate gin-server api/openapi.yaml > internal/generated/server.go; \
-		~/go/bin/oapi-codegen -package client -generate types,client api/openapi.yaml > internal/client/client.go; \
+		$$HOME/go/bin/oapi-codegen -package generated -generate types api/openapi.yaml > internal/generated/types.go; \
+		$$HOME/go/bin/oapi-codegen -package generated -generate gin-server api/openapi.yaml > internal/generated/server.go; \
+		$$HOME/go/bin/oapi-codegen -package client -generate types,client api/openapi.yaml > internal/client/client.go; \
 		echo "Code generation complete"; \
 	fi
 

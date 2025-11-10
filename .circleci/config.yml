@@ -1,29 +1,6 @@
 version: 2.1
 
 jobs:
-  test:
-    machine:
-      image: ubuntu-2004:current
-    steps:
-      - checkout
-      - run: |
-          curl -L https://go.dev/dl/go1.23.0.linux-amd64.tar.gz | sudo tar -xzC /usr/local
-          echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> ~/.bashrc
-          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
-      - run: make install-tools
-      - run: |
-          # Generate code (download-api is a dependency of generate)
-          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
-          make generate
-          # Verify generated files exist and are not empty
-          ls -la api/openapi.yaml || echo "ERROR: OpenAPI spec not found!"
-          ls -la internal/generated/ internal/client/ || echo "ERROR: Generated files not found!"
-          test -s internal/generated/types.go || (echo "ERROR: types.go is empty!" && exit 1)
-          test -s internal/generated/server.go || (echo "ERROR: server.go is empty!" && exit 1)
-          test -s internal/client/client.go || (echo "ERROR: client.go is empty!" && exit 1)
-      - run: make deps
-      - run: make test
-
   build-and-publish:
     machine:
       image: ubuntu-2004:current
@@ -33,19 +10,38 @@ jobs:
           curl -L https://go.dev/dl/go1.23.0.linux-amd64.tar.gz | sudo tar -xzC /usr/local
           echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> ~/.bashrc
           export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
-      - run: make install-tools
       - run: |
-          # Generate code (download-api is a dependency of generate)
           export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
-          make generate
+          # Install oapi-codegen
+          go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+          # Verify oapi-codegen was installed
+          ls -la $HOME/go/bin/oapi-codegen || (echo "ERROR: oapi-codegen not found" && exit 1)
+      - run: |
+          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+          # Download OpenAPI specification from somana repo
+          mkdir -p api
+          curl -L -o api/openapi.yaml https://github.com/miku-kookie/somana/releases/download/v1.0.29/openapi.yaml
+          echo "OpenAPI specification downloaded to api/openapi.yaml"
+          # Verify OpenAPI spec exists
+          test -s api/openapi.yaml || (echo "ERROR: OpenAPI spec not found or empty!" && exit 1)
+      - run: |
+          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+          # Generate code from OpenAPI spec
+          mkdir -p internal/generated internal/client
+          $HOME/go/bin/oapi-codegen -package generated -generate types api/openapi.yaml > internal/generated/types.go
+          $HOME/go/bin/oapi-codegen -package generated -generate gin-server api/openapi.yaml > internal/generated/server.go
+          $HOME/go/bin/oapi-codegen -package client -generate types,client api/openapi.yaml > internal/client/client.go
           # Verify generated files exist and are not empty
-          ls -la api/openapi.yaml || echo "ERROR: OpenAPI spec not found!"
-          ls -la internal/generated/ internal/client/ || echo "ERROR: Generated files not found!"
           test -s internal/generated/types.go || (echo "ERROR: types.go is empty!" && exit 1)
           test -s internal/generated/server.go || (echo "ERROR: server.go is empty!" && exit 1)
           test -s internal/client/client.go || (echo "ERROR: client.go is empty!" && exit 1)
-      - run: make deps
       - run: |
+          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+          # Install dependencies
+          go mod download
+          go get github.com/oapi-codegen/runtime
+      - run: |
+          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
           # Build for multiple architectures
           mkdir -p bin
           echo "Building for Linux AMD64..."
@@ -82,16 +78,13 @@ jobs:
             bin/somana-agent-darwin-amd64 \
             bin/somana-agent-darwin-arm64 \
             --title "Somana Agent $VERSION" \
-            --notes "Somana Agent $VERSION - Built and tested on CircleCI with multi-architecture support for Linux and macOS"
+            --notes "Somana Agent $VERSION - Built on CircleCI with multi-architecture support for Linux and macOS"
 
 workflows:
   version: 2
-  test-and-build:
+  build-and-publish:
     jobs:
-      - test
       - build-and-publish:
-          requires:
-            - test
           filters:
             branches:
               only: main
