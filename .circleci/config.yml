@@ -10,17 +10,21 @@ jobs:
           curl -L https://go.dev/dl/go1.23.0.linux-amd64.tar.gz | sudo tar -xzC /usr/local
           echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
           export PATH=$PATH:/usr/local/go/bin
-      - run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+      - run: |
+          export PATH=$PATH:/usr/local/go/bin
+          go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+          export PATH=$PATH:$(go env GOPATH)/bin
       - run: |
           # Download OpenAPI specification from somana repo
           mkdir -p api
           curl -L -o api/openapi.yaml https://github.com/miku-kookie/somana/releases/download/v1.0.29/openapi.yaml
       - run: |
+          export PATH=$PATH:/usr/local/go/bin:$(go env GOPATH)/bin
           # Generate code from OpenAPI spec
           mkdir -p internal/generated internal/client
-          ~/go/bin/oapi-codegen -package generated -generate types api/openapi.yaml > internal/generated/types.go
-          ~/go/bin/oapi-codegen -package generated -generate gin-server api/openapi.yaml > internal/generated/server.go
-          ~/go/bin/oapi-codegen -package client -generate types,client api/openapi.yaml > internal/client/client.go
+          oapi-codegen -package generated -generate types api/openapi.yaml > internal/generated/types.go
+          oapi-codegen -package generated -generate gin-server api/openapi.yaml > internal/generated/server.go
+          oapi-codegen -package client -generate types,client api/openapi.yaml > internal/client/client.go
       - run: |
           # Install dependencies
           go mod download
