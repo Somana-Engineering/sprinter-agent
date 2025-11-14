@@ -27,10 +27,10 @@ type HostRegistrationService struct {
 
 // NewHostRegistrationService creates a new host registration service
 func NewHostRegistrationService(cfg *config.Config) *HostRegistrationService {
-	log.Printf("Creating host registration service with URL: %s", cfg.HostRegistration.SomanaURL)
+	log.Printf("Creating host registration service with URL: %s", cfg.HostRegistration.SprinterURL)
 	
 	httpClient := &http.Client{Timeout: 10 * time.Second}
-	apiClient, err := client.NewClientWithResponses(cfg.HostRegistration.SomanaURL, client.WithHTTPClient(httpClient))
+	apiClient, err := client.NewClientWithResponses(cfg.HostRegistration.SprinterURL, client.WithHTTPClient(httpClient))
 	if err != nil {
 		log.Printf("Warning: failed to create client: %v", err)
 	} else {
@@ -46,7 +46,7 @@ func NewHostRegistrationService(cfg *config.Config) *HostRegistrationService {
 
 // Start begins the host registration and heartbeat process
 func (s *HostRegistrationService) Start() error {
-	if s.config.HostRegistration.SomanaURL == "" {
+	if s.config.HostRegistration.SprinterURL == "" {
 		log.Println("Host registration not configured - skipping")
 		return nil
 	}
@@ -92,7 +92,7 @@ func (s *HostRegistrationService) GetClient() *client.ClientWithResponses {
 
 // Stop stops the heartbeat process
 func (s *HostRegistrationService) Stop() {
-	if s.config.HostRegistration.SomanaURL != "" {
+	if s.config.HostRegistration.SprinterURL != "" {
 		close(s.stopChan)
 		log.Println("Host registration stopped")
 	}
@@ -144,7 +144,7 @@ func (s *HostRegistrationService) registerHost(hostname, ipAddress, osVersion st
 		OsVersion: osVersion,
 	}
 
-	log.Printf("Sending registration request to: %s/api/v1/hosts", s.config.HostRegistration.SomanaURL)
+	log.Printf("Sending registration request to: %s/api/v1/hosts", s.config.HostRegistration.SprinterURL)
 	resp, err := s.client.PostApiV1HostsWithResponse(ctx, reqBody)
 	if err != nil {
 		log.Printf("Registration request failed: %v", err)

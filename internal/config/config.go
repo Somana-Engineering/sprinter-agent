@@ -11,8 +11,8 @@ import (
 type Config struct {
 	// Simplified host registration configuration
 	HostRegistration struct {
-		SomanaURL string `yaml:"somana_url"`
-		HostID    string `yaml:"host_id"`
+		SprinterURL string `yaml:"sprinter_url"`
+		HostID      string `yaml:"host_id"`
 	} `yaml:"host_registration"`
 }
 
@@ -21,11 +21,11 @@ func LoadConfig(configPath string) (*Config, error) {
 	// Create default config
 	config := &Config{
 		HostRegistration: struct {
-			SomanaURL string `yaml:"somana_url"`
-			HostID    string `yaml:"host_id"`
+			SprinterURL string `yaml:"sprinter_url"`
+			HostID      string `yaml:"host_id"`
 		}{
-			SomanaURL: "http://localhost:8081",
-			HostID:    "",
+			SprinterURL: "http://localhost:8081",
+			HostID:      "",
 		},
 	}
 
