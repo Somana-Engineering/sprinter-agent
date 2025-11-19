@@ -65,7 +65,7 @@ create-config:
 	@mkdir -p logs
 	@if [ ! -f config/config.yaml ]; then \
 		echo "Creating default config.yaml..."; \
-		cp config/config.yaml.example config/config.yaml 2>/dev/null || echo 'host_registration:\n  sprinter_url: "http://localhost:8081"\n  host_rid: ""' > config/config.yaml; \
+		cp config/config.yaml.example config/config.yaml 2>/dev/null || echo 'host_registration:\n  sprinter_url: "http://localhost:8081"' > config/config.yaml; \
 	fi
 
 # Build the application (includes code generation)

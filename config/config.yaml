@@ -1,3 +1,2 @@
 host_registration:
-    sprinter_url: http://3.14.12.179:8080
-    host_rid: ""
+    sprinter_url: http://localhost:8080

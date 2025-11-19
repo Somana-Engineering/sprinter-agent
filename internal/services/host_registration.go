@@ -8,9 +8,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"sprinter-agent/internal/client"
 	"sprinter-agent/internal/config"
@@ -103,11 +106,15 @@ func (s *HostRegistrationService) registerHost(hostname, ipAddress, osVersion st
 
 	log.Printf("Attempting to register host: %s (%s) - %s", hostname, ipAddress, osVersion)
 
-	// Check if we have a host RID in config
-	if s.config.HostRegistration.HostRid != "" {
-		hostRid := s.config.HostRegistration.HostRid
+	// Check if we have a host RID stored on disk
+	hostRid, err := s.loadHostRid()
+	if err != nil {
+		log.Printf("Failed to load host RID from disk: %v", err)
+	}
 
-		log.Printf("Checking if host RID %s exists", hostRid)
+	// If RID exists on disk, verify it exists on the server
+	if hostRid != "" {
+		log.Printf("Found host RID on disk: %s, verifying with server", hostRid)
 		
 		// Check if host exists with this RID
 		resp, err := s.client.GetApiV1HostsHostRidWithResponse(ctx, client.HostRid(hostRid))
@@ -119,12 +126,28 @@ func (s *HostRegistrationService) registerHost(hostname, ipAddress, osVersion st
 		if resp.StatusCode() == http.StatusOK && resp.JSON200 != nil {
 			// Host exists with this RID, use it
 			s.hostRid = hostRid
-			log.Printf("Found existing host with RID: %s", s.hostRid)
+			log.Printf("Verified existing host with RID: %s", s.hostRid)
+			
+			// Update host information in case it changed
+			if err := s.updateHost(hostname, ipAddress); err != nil {
+				log.Printf("Warning: failed to update host information: %v", err)
+			}
+			
 			return nil
 		} else {
-			log.Printf("Host with RID %s does not exist, will create new host", hostRid)
+			log.Printf("Host with RID %s does not exist on server, will create new host", hostRid)
+			// RID exists on disk but not on server - create new host with this RID
 		}
 	}
+
+	// Generate new RID if we don't have one
+	if hostRid == "" {
+		hostRid = s.generateHostRid()
+		log.Printf("Generated new host RID: %s", hostRid)
+	}
+
+	// Set the RID we'll use
+	s.hostRid = hostRid
 
 	// Get OS name from runtime
 	osName := runtime.GOOS
@@ -158,15 +181,81 @@ func (s *HostRegistrationService) registerHost(hostname, ipAddress, osVersion st
 		return fmt.Errorf("no host data in response")
 	}
 
-	s.hostRid = string(resp.JSON201.HostRid)
-	s.config.HostRegistration.HostRid = s.hostRid
-
-	// Save updated config
-	if err := config.SaveConfig(s.config, "config/config.yaml"); err != nil {
-		log.Printf("Warning: failed to save host RID to config: %v", err)
+	// Save our locally generated RID to disk
+	if err := s.saveHostRid(s.hostRid); err != nil {
+		log.Printf("Warning: failed to save host RID to disk: %v", err)
 	}
 
 	log.Printf("Successfully registered host with RID: %s", s.hostRid)
+	return nil
+}
+
+// updateHost updates host information on the server
+func (s *HostRegistrationService) updateHost(hostname, ipAddress string) error {
+	ctx := context.Background()
+
+	reqBody := client.HostUpdateRequest{
+		Hostname:  &hostname,
+		IpAddress: &ipAddress,
+	}
+
+	resp, err := s.client.PutApiV1HostsHostRidWithResponse(ctx, client.HostRid(s.hostRid), reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to update host: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("update failed with status: %d", resp.StatusCode())
+	}
+
+	return nil
+}
+
+// generateHostRid generates a new UUID-based RID
+func (s *HostRegistrationService) generateHostRid() string {
+	return uuid.New().String()
+}
+
+// getRidFilePath returns the path to the RID storage file
+func (s *HostRegistrationService) getRidFilePath() string {
+	return filepath.Join("data", "host.rid")
+}
+
+// loadHostRid loads the host RID from disk
+func (s *HostRegistrationService) loadHostRid() (string, error) {
+	ridPath := s.getRidFilePath()
+	
+	data, err := os.ReadFile(ridPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil // File doesn't exist, no RID stored
+		}
+		return "", fmt.Errorf("failed to read RID file: %w", err)
+	}
+
+	rid := strings.TrimSpace(string(data))
+	if rid == "" {
+		return "", nil
+	}
+
+	return rid, nil
+}
+
+// saveHostRid saves the host RID to disk
+func (s *HostRegistrationService) saveHostRid(rid string) error {
+	ridPath := s.getRidFilePath()
+	
+	// Ensure directory exists
+	dir := filepath.Dir(ridPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	// Write RID to file
+	if err := os.WriteFile(ridPath, []byte(rid), 0644); err != nil {
+		return fmt.Errorf("failed to write RID file: %w", err)
+	}
+
 	return nil
 }
 
