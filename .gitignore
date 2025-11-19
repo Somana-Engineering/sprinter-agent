@@ -21,8 +21,8 @@ go.work
 bin/
 data/
 
-# Generated code
-internal/generated/
+# Generated code (temporarily allowing check-in)
+# internal/generated/
 
 # Downloaded OpenAPI specification
 api/openapi.yaml
