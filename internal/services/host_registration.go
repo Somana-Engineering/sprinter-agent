@@ -15,14 +15,14 @@ import (
 
 	"github.com/google/uuid"
 
-	"sprinter-agent/internal/client"
 	"sprinter-agent/internal/config"
+	"sprinter-agent/internal/generated"
 )
 
 // HostRegistrationService handles registration with main Somana instance
 type HostRegistrationService struct {
 	config   *config.Config
-	client   *client.ClientWithResponses
+	client   *generated.ClientWithResponses
 	hostRid  string
 	stopChan chan bool
 }
@@ -32,7 +32,7 @@ func NewHostRegistrationService(cfg *config.Config) *HostRegistrationService {
 	log.Printf("Creating host registration service with URL: %s", cfg.HostRegistration.SprinterURL)
 	
 	httpClient := &http.Client{Timeout: 10 * time.Second}
-	apiClient, err := client.NewClientWithResponses(cfg.HostRegistration.SprinterURL, client.WithHTTPClient(httpClient))
+	apiClient, err := generated.NewClientWithResponses(cfg.HostRegistration.SprinterURL, generated.WithHTTPClient(httpClient))
 	if err != nil {
 		log.Printf("Warning: failed to create client: %v", err)
 	} else {
@@ -88,7 +88,7 @@ func (s *HostRegistrationService) GetHostRid() string {
 }
 
 // GetClient returns the API client
-func (s *HostRegistrationService) GetClient() *client.ClientWithResponses {
+func (s *HostRegistrationService) GetClient() *generated.ClientWithResponses {
 	return s.client
 }
 
@@ -117,7 +117,7 @@ func (s *HostRegistrationService) registerHost(hostname, ipAddress, osVersion st
 		log.Printf("Found host RID on disk: %s, verifying with server", hostRid)
 		
 		// Check if host exists with this RID
-		resp, err := s.client.GetApiV1HostsHostRidWithResponse(ctx, client.HostRid(hostRid))
+		resp, err := s.client.GetApiV1HostsHostRidWithResponse(ctx, generated.HostRid(hostRid))
 		if err != nil {
 			log.Printf("Failed to check host existence: %v", err)
 			return fmt.Errorf("failed to check host existence: %w", err)
@@ -156,8 +156,8 @@ func (s *HostRegistrationService) registerHost(hostname, ipAddress, osVersion st
 	}
 
 	// Register new host
-	reqBody := client.HostCreateRequest{
-		HostRid:   client.HostRid(s.hostRid),
+	reqBody := generated.HostCreateRequest{
+		HostRid:   generated.HostRid(s.hostRid),
 		Hostname:  hostname,
 		IpAddress: ipAddress,
 		OsName:    osName,
@@ -195,12 +195,12 @@ func (s *HostRegistrationService) registerHost(hostname, ipAddress, osVersion st
 func (s *HostRegistrationService) updateHost(hostname, ipAddress string) error {
 	ctx := context.Background()
 
-	reqBody := client.HostUpdateRequest{
+	reqBody := generated.HostUpdateRequest{
 		Hostname:  &hostname,
 		IpAddress: &ipAddress,
 	}
 
-	resp, err := s.client.PutApiV1HostsHostRidWithResponse(ctx, client.HostRid(s.hostRid), reqBody)
+	resp, err := s.client.PutApiV1HostsHostRidWithResponse(ctx, generated.HostRid(s.hostRid), reqBody)
 	if err != nil {
 		return fmt.Errorf("failed to update host: %w", err)
 	}
@@ -282,9 +282,9 @@ func (s *HostRegistrationService) sendHeartbeat() error {
 	ctx := context.Background()
 	
 	// API changed: status field removed, server tracks last_heartbeat automatically
-	reqBody := client.HostHeartbeatRequest{}
+	reqBody := generated.HostHeartbeatRequest{}
 
-	resp, err := s.client.PostApiV1HostsHostRidHeartbeatWithResponse(ctx, client.HostRid(s.hostRid), reqBody)
+	resp, err := s.client.PostApiV1HostsHostRidHeartbeatWithResponse(ctx, generated.HostRid(s.hostRid), reqBody)
 	if err != nil {
 		return fmt.Errorf("failed to send heartbeat: %w", err)
 	}

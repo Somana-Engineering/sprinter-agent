@@ -9,20 +9,20 @@ import (
 	"strings"
 	"time"
 
-	"sprinter-agent/internal/client"
 	"sprinter-agent/internal/config"
+	"sprinter-agent/internal/generated"
 )
 
 // SystemdMonitorService handles monitoring and reporting systemd services
 type SystemdMonitorService struct {
 	config   *config.Config
-	client   *client.ClientWithResponses
+	client   *generated.ClientWithResponses
 	hostRid  string
 	stopChan chan bool
 }
 
 // NewSystemdMonitorService creates a new systemd monitor service
-func NewSystemdMonitorService(cfg *config.Config, apiClient *client.ClientWithResponses, hostRid string) *SystemdMonitorService {
+func NewSystemdMonitorService(cfg *config.Config, apiClient *generated.ClientWithResponses, hostRid string) *SystemdMonitorService {
 	return &SystemdMonitorService{
 		config:   cfg,
 		client:   apiClient,
@@ -77,15 +77,15 @@ func (s *SystemdMonitorService) reportSystemdServices() {
 	if err != nil {
 		log.Printf("Failed to get systemd services: %v", err)
 		// Send empty list if systemd doesn't exist or fails
-		services = []client.SystemdUnit{}
+		services = []generated.SystemdUnit{}
 	}
 
-	reqBody := client.SystemdServicesRequest{
+	reqBody := generated.SystemdServicesRequest{
 		Services: services,
 	}
 
 	ctx := context.Background()
-	resp, err := s.client.PutApiV1HostsHostRidSystemdServicesWithResponse(ctx, client.HostRid(s.hostRid), reqBody)
+	resp, err := s.client.PutApiV1HostsHostRidSystemdServicesWithResponse(ctx, generated.HostRid(s.hostRid), reqBody)
 	if err != nil {
 		log.Printf("Failed to report systemd services: %v", err)
 		return
@@ -100,11 +100,11 @@ func (s *SystemdMonitorService) reportSystemdServices() {
 }
 
 // getSystemdServices reads systemd services from the system
-func (s *SystemdMonitorService) getSystemdServices() ([]client.SystemdUnit, error) {
+func (s *SystemdMonitorService) getSystemdServices() ([]generated.SystemdUnit, error) {
 	// Check if systemctl exists
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		log.Println("systemctl not found - returning empty list")
-		return []client.SystemdUnit{}, nil
+		return []generated.SystemdUnit{}, nil
 	}
 
 	// Run systemctl list-units command
@@ -118,7 +118,7 @@ func (s *SystemdMonitorService) getSystemdServices() ([]client.SystemdUnit, erro
 	// systemctl output format: UNIT LOAD ACTIVE SUB DESCRIPTION
 	// Fields are separated by multiple spaces
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	services := make([]client.SystemdUnit, 0, len(lines))
+	services := make([]generated.SystemdUnit, 0, len(lines))
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -132,7 +132,7 @@ func (s *SystemdMonitorService) getSystemdServices() ([]client.SystemdUnit, erro
 		if len(parts) < 5 {
 			// Try to parse with at least 4 fields (description might be empty)
 			if len(parts) >= 4 {
-				services = append(services, client.SystemdUnit{
+				services = append(services, generated.SystemdUnit{
 					Unit:        parts[0],
 					Load:        parts[1],
 					Active:      parts[2],
@@ -150,7 +150,7 @@ func (s *SystemdMonitorService) getSystemdServices() ([]client.SystemdUnit, erro
 		sub := parts[3]
 		description := strings.Join(parts[4:], " ")
 
-		services = append(services, client.SystemdUnit{
+		services = append(services, generated.SystemdUnit{
 			Unit:        unit,
 			Load:        load,
 			Active:      active,
