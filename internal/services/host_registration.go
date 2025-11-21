@@ -178,6 +178,13 @@ func (s *HostRegistrationService) registerHost(hostname, ipAddress, osVersion st
 
 	// Set the RID we'll use
 	s.hostRid = hostRid
+	
+	// Validate RID is set
+	if s.hostRid == "" {
+		return fmt.Errorf("host RID is empty after generation - this should not happen")
+	}
+	
+	log.Printf("Using host RID for registration: %s", s.hostRid)
 
 	// Get OS name from runtime
 	osName := runtime.GOOS
@@ -212,7 +219,16 @@ func (s *HostRegistrationService) registerHost(hostname, ipAddress, osVersion st
 		return fmt.Errorf("no host data in response")
 	}
 
-	// Save our locally generated RID to disk
+	// Use the RID from the server response (server may have validated/modified it)
+	serverRid := string(resp.JSON201.HostRid)
+	if serverRid == "" {
+		log.Printf("Warning: Server returned empty RID, using locally generated RID: %s", s.hostRid)
+	} else if serverRid != s.hostRid {
+		log.Printf("Server returned different RID (%s) than we sent (%s), using server RID", serverRid, s.hostRid)
+		s.hostRid = serverRid
+	}
+
+	// Save the RID to disk
 	if err := s.saveHostRid(s.hostRid); err != nil {
 		log.Printf("Warning: failed to save host RID to disk: %v", err)
 	}
