@@ -59,7 +59,7 @@ func (s *HostRegistrationService) Start() error {
 		return fmt.Errorf("failed to get hostname: %w", err)
 	}
 
-	ipAddress, err := s.getLocalIP()
+	ipAddress, err := s.getIP()
 	if err != nil {
 		return fmt.Errorf("failed to get IP address: %w", err)
 	}
@@ -177,6 +177,13 @@ func (s *HostRegistrationService) registerHost(hostname, ipAddress, osVersion st
 
 	// Set the RID we'll use
 	s.hostRid = hostRid
+	
+	// Validate RID is set
+	if s.hostRid == "" {
+		return fmt.Errorf("host RID is empty after generation - this should not happen")
+	}
+	
+	log.Printf("Using host RID for registration: %s", s.hostRid)
 
 	// Get OS name from runtime
 	osName := runtime.GOOS
@@ -211,7 +218,16 @@ func (s *HostRegistrationService) registerHost(hostname, ipAddress, osVersion st
 		return fmt.Errorf("no host data in response")
 	}
 
-	// Save our locally generated RID to disk
+	// Use the RID from the server response (server may have validated/modified it)
+	serverRid := string(resp.JSON201.HostRid)
+	if serverRid == "" {
+		log.Printf("Warning: Server returned empty RID, using locally generated RID: %s", s.hostRid)
+	} else if serverRid != s.hostRid {
+		log.Printf("Server returned different RID (%s) than we sent (%s), using server RID", serverRid, s.hostRid)
+		s.hostRid = serverRid
+	}
+
+	// Save the RID to disk
 	if err := s.saveHostRid(s.hostRid); err != nil {
 		log.Printf("Warning: failed to save host RID to disk: %v", err)
 	}
@@ -338,8 +354,23 @@ func (s *HostRegistrationService) sendHeartbeat() error {
 	return nil
 }
 
-// getLocalIP gets the local IP address
-func (s *HostRegistrationService) getLocalIP() (string, error) {
+// getIP gets the IP address, preferring Tailscale IP if available
+func (s *HostRegistrationService) getIP() (string, error) {
+	// Try to get IP from tailscale first
+	if output, err := exec.Command("tailscale", "ip").Output(); err == nil {
+		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+		if len(lines) > 0 && lines[0] != "" {
+			ip := strings.TrimSpace(lines[0])
+			// Validate it's a valid IP address
+			if parsedIP := net.ParseIP(ip); parsedIP != nil {
+				log.Printf("Using Tailscale IP: %s", ip)
+				return ip, nil
+			}
+		}
+	}
+
+	// Fallback to original method if tailscale is not available
+	log.Printf("tailscale ip command not available, falling back to hostname lookup")
 	hostname, err := os.Hostname()
 	if err != nil {
 		return "", err
